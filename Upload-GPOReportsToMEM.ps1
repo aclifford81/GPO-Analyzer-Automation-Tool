@@ -215,7 +215,7 @@ $MyProfile = @"
  
 
     Update-Log -Message $MyProfile
-    Invoke-MSGraphRequest -Url "https://graph.microsoft.com/beta/deviceManagement/groupPolicyMigrationReports/createMigrationReport" -HttpMethod POST -Content $MyProfile -ErrorAction Stop
+    New-MgBetaDeviceManagementGroupPolicyMigrationReport -BodyParameter $MyProfile
     $i++
 
     }
@@ -226,7 +226,7 @@ $MyProfile = @"
 
 function Check-forNeededModules {
 $Modules = Get-Module -listavailable
-   If (!($Modules | where {$_.name -like "*Microsoft.Graph.Intune*"})) 
+   If (!($Modules | where {$_.name -like "Microsoft.Graph.Beta.DeviceManagement.Administration"})) 
         { 
             Update-Log -Message "Graph PS modules missing, trying to install"            
             try {
@@ -249,7 +249,7 @@ $Modules = Get-Module -listavailable
                     Import-Module ServerManager
                     Add-WindowsFeature -Name "RSAT-AD-PowerShell" –IncludeAllSubFeature
                     } else {
-                    Enable-WindowsOptionalFeature -Online -FeatureName RSATClient-Roles-AD-Powershell
+                    Add-WindowsCapability -Name "Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0" -online
                     } 
                  } catch {
                  Update-Log -Message "Error installing Active Directory PS module, Please install the Active Directory RSAT Powershell modeule manually and then re-run this script." -IncludeErrorLog
@@ -320,7 +320,7 @@ Function Draw-GUI {
     Create-ProgressBar -Status "Purging ALL GPO Reports from MEM"
     $i=1    
     
-    $GPOReports = (Invoke-MSGraphRequest -Url "https://graph.microsoft.com/beta/deviceManagement/groupPolicyMigrationReports" -HttpMethod Get).Value
+    $GPOReports = Get-MgBetaDeviceManagementGroupPolicyMigrationReport -All
         
         Foreach ($GPOReport in $GPOReports) 
             {
@@ -329,10 +329,9 @@ Function Draw-GUI {
             $form1.Refresh()
             
             $GPOReportID = $GPOReport.ID
-            $URL = "https://graph.microsoft.com/beta/deviceManagement/groupPolicyMigrationReports/" + $GPOReportID
-            $URL = $URL -replace " ","%20"
-            Update-Log -Message "Deleting $($URL)"
-            Invoke-MSGraphRequest -Url $URL -HttpMethod DELETE -ErrorAction Stop
+            Update-Log -Message "Deleting $($GPOReport.DisplayName)"
+            Remove-MgBetaDeviceManagementGroupPolicyMigrationReport -GroupPolicyMigrationReportId $GPOReportID
+            
 
             }
     $form1.hide()
@@ -449,7 +448,12 @@ Update-Log -Message "Checking for required PS Modules." -SectionBreak
 Check-forNeededModules
 Write-Host "Logging into GRAPH."
 Update-Log -Message "Logging into GRAPH." -SectionBreak
-Connect-MSGraph
+Import-Module Microsoft.Graph.Beta.DeviceManagement.Administration
+#Select-MgProfile -Name Beta
+$connectParams = @{
+    Scopes = "DeviceManagementConfiguration.ReadWrite.All"
+}
+Connect-MgGraph @connectParams
 Write-Host "Building UI."
 Update-Log -Message "Logging into GRAPH." -SectionBreak
 Draw-GUI
